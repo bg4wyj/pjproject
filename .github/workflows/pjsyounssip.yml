@@ -1,0 +1,63 @@
+name: Build PJSYOUNSSIP for ESP32
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        toolchain: [gcc-arm-none-eabi, clang-arm-none-eabi]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          if [ "${{ matrix.os }}" == "windows-latest" ]; then
+            choco install mingw-w64-x64-gcc
+            choco install python3
+          elif [ "${{ matrix.os }}" == "macos-latest" ]; then
+            brew install gcc-arm-none-eabi
+            brew install python3
+          else
+            sudo apt-get update
+            sudo apt-get install -y build-essential git wget python3-pip
+            pip3 install -U platformio
+          fi
+
+      - name: Configure PJSYOUNSSIP
+        run: |
+          if [ "${{ matrix.toolchain }}" == "gcc-arm-none-eabi" ]; then
+            export CC=arm-none-eabi-gcc
+            export CXX=arm-none-eabi-g++
+          elif [ "${{ matrix.toolchain }}" == "clang-arm-none-eabi" ]; then
+            export CC=clang-arm-none-eabi
+            export CXX=clang-arm-none-eabi++
+          fi
+
+          mkdir build && cd build
+          cmake ..
+          cmake --target.esp32
+        env:
+          PJSYOUNSSIP_CONFIG: "${{ github.workspace }}/config/pjsyounssip_config.h"
+
+      - name: Compile
+        run: |
+          cd build
+          make -j$(nproc) pjyounssip
+          make install
+        env:
+          PJSYOUNSSIP_CONFIG: "${{ github.workspace }}/config/pjsyounssip_config.h"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pjsyounssip-esp32-${{ matrix.os }}-${{ matrix.toolchain }}
+          path: build/usr/local/lib/pjsyounssip/
